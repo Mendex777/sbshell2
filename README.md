@@ -22,6 +22,8 @@ Sbshell — это вспомогательный скрипт для офици
 
 ```
 bash <(curl -sL https://raw.githubusercontent.com/Mendex777/sbshell2/refs/heads/main/sbshall.sh)
+```
+```
 bash <(curl -sL https://raw.githubusercontent.com/Mendex777/sbshell2/refs/heads/main/sbshall_auto_install.sh)
 ```
 - После инициализации введите "**sb**" для входа в меню.
