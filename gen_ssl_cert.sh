@@ -121,7 +121,7 @@ gen_ssl_cert() {
     check_openssl
 
     # Проверка существующего сертификата
-    local existing=$(sqlite3 "$DB_PATH" "SELECT value FROM settings WHERE name='webCertFile' LIMIT 1;")
+    local existing=$(sqlite3 "$DB_PATH" "SELECT value FROM settings WHERE key='webCertFile' LIMIT 1;")
     if [ -n "$existing" ]; then
         echo -e "${WARN} SSL уже прописан: $existing"
         return
@@ -162,8 +162,8 @@ EOF
     # Вставка в базу через INSERT OR REPLACE
     sqlite3 "$DB_PATH" <<SQL
 BEGIN;
-INSERT OR REPLACE INTO settings (name,value) VALUES ('webCertFile','$SSL_CERT');
-INSERT OR REPLACE INTO settings (name,value) VALUES ('webKeyFile','$SSL_KEY');
+INSERT OR REPLACE INTO settings (key,value) VALUES ('webCertFile','$SSL_CERT');
+INSERT OR REPLACE INTO settings (key,value) VALUES ('webKeyFile','$SSL_KEY');
 COMMIT;
 SQL
 
