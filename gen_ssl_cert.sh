@@ -115,7 +115,7 @@ install_openssl() {
     fi
 }
 
-# --- Генерация самоподписанного сертификата ---
+# --- Генерация самоподписанного сертификата и вставка в базу ---
 gen_ssl_cert() {
     check_sqlite3
     check_openssl
@@ -123,14 +123,14 @@ gen_ssl_cert() {
     # Проверка существующего сертификата
     local existing=$(sqlite3 "$DB_PATH" "SELECT value FROM settings WHERE key='webCertFile' LIMIT 1;")
     if [ -n "$existing" ]; then
-        echo -e "${WARN} SSL уже прописан: $existing"
+        echo -e "${WARN} SSL уже прописан в базе: $existing"
         return
     fi
 
-    # Создаём бэкап базы перед изменением
+    # Бекап перед изменением базы
     create_backup
 
-    # OpenSSL конфиг для SAN
+    # Генерация сертификата
     TMP_CONF=$(mktemp)
     cat > "$TMP_CONF" <<EOF
 [req]
@@ -159,7 +159,7 @@ EOF
     chmod 644 "$SSL_CERT"
     chown root:root "$SSL_KEY" "$SSL_CERT"
 
-    # Вставка в базу через INSERT OR REPLACE
+    # Вставка в базу
     sqlite3 "$DB_PATH" <<SQL
 BEGIN;
 INSERT OR REPLACE INTO settings (key,value) VALUES ('webCertFile','$SSL_CERT');
@@ -167,24 +167,64 @@ INSERT OR REPLACE INTO settings (key,value) VALUES ('webKeyFile','$SSL_KEY');
 COMMIT;
 SQL
 
-    echo -e "${CHECK} Самоподписанный SSL установлен. Перезапустите 3X-UI для применения."
+    echo -e "${CHECK} SSL успешно установлен в базе."
+    rm -f "$TMP_CONF"
+}
+
+# --- Генерация сертификата без изменения базы ---
+gen_ssl_only() {
+    check_openssl
+
+    TMP_CONF=$(mktemp)
+    cat > "$TMP_CONF" <<EOF
+[req]
+distinguished_name = req_distinguished_name
+x509_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = 3x-ui.local
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = 3x-ui.local
+IP.1 = 127.0.0.1
+EOF
+
+    openssl req -x509 -nodes -newkey rsa:4096 \
+        -keyout "$SSL_KEY" \
+        -out "$SSL_CERT" \
+        -days 3650 -sha256 \
+        -config "$TMP_CONF"
+
+    chmod 600 "$SSL_KEY"
+    chmod 644 "$SSL_CERT"
+    chown root:root "$SSL_KEY" "$SSL_CERT"
+
+    echo -e "${CHECK} SSL сертификат сгенерирован!"
+    echo -e "Путь к сертификату: ${CYAN}$SSL_CERT${NC}"
+    echo -e "Путь к приватному ключу: ${CYAN}$SSL_KEY${NC}"
     rm -f "$TMP_CONF"
 }
 
 # ====== Главное меню ======
 while true; do
     echo -e "\n${CYAN}===== 3X-UI Maintenance Menu =====${NC}"
-    echo "1) Backup Database      - Создать резервную копию базы"
-    echo "2) Restore Database     - Восстановить базу из бекапа"
-    echo "3) Install Self-Signed SSL - Установить сертификат на 10 лет"
-    echo "0) Exit                 - Выход"
-    echo -n "Выберите действие [0-3]: "
+    echo "1) Backup Database          - Создать резервную копию базы"
+    echo "2) Restore Database         - Восстановить базу из бекапа"
+    echo "3) Install Self-Signed SSL  - Установить сертификат в базу на 10 лет"
+    echo "4) Generate SSL Only        - Генерация сертификата без изменения базы"
+    echo "0) Exit                     - Выход"
+    echo -n "Выберите действие [0-4]: "
     read choice
 
     case "$choice" in
         1) create_backup ;;
         2) restore_backup ;;
         3) gen_ssl_cert ;;
+        4) gen_ssl_only ;;
         0) echo "Выход..."; exit 0 ;;
         *) echo -e "${WARN} Неверный выбор." ;;
     esac
